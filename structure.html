@@ -10,23 +10,18 @@
 </head>
 <body style='margin: 0px; overflow: hidden;'>
     <a-scene embedded arjs='sourceType: webcam;'>
-       <!-- Define the marker -->
-       <a-marker preset="hiro">
-          <!-- Place your 3D object here -->
-          <a-box position='0 0.5 0' material='color: red;'></a-box>
-       </a-marker>
-       <!-- Camera -->
-       <a-entity camera></a-entity>
+        <!-- Custom Marker -->
+        <a-marker type='pattern' url='"https://github.com/talkats/WebXR/blob/main/pattern-qrcode.69524201.patt"'>
+            <!-- Your 3D Model -->
+            <a-entity gltf-model='"C:\Users\tkdes\Downloads\heartclear.glb"' position='0 0.5 0' scale='0.5 0.5 0.5'></a-entity>
+        </a-marker>
+        <a-entity camera></a-entity>
     </a-scene>
- 
-<div class="gallery">
-    <!-- Example of one image item -->
-    <div class="item">
-        <img src="path_to_your_online_image.jpg" alt="Description of Image">
-        <button class="xr-btn" data-xr="xr_content_1">Open XR Window</button>
+
+    <div class="gallery">
+        <!-- Gallery Items -->
+        <!-- Ensure each item has the correct image path and adjust buttons as needed -->
     </div>
-    <!-- Repeat the above div for each of your six images, with correct paths and unique data-xr values if necessary -->
-</div>
 
 <script src="script.js"></script>
 </body>
