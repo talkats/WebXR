@@ -34,9 +34,34 @@
       width: 100vw;
       height: 100vh;
     }
+    #debug {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      z-index: 1000;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      max-width: 80%;
+      text-align: center;
+    }
+    #debug-log {
+      margin-top: 10px;
+      color: #666;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
+  <!-- Debug overlay -->
+  <div id="debug">
+    <strong>AR Debug Status</strong><br>
+    Camera Status: <span id="camera-status">Waiting...</span><br>
+    <div id="debug-log"></div>
+  </div>
+
   <div id="ui-container">
     <label>
       Load GLB Model (max 70MB):
@@ -49,8 +74,9 @@
   <a-scene
     embedded
     vr-mode-ui="enabled: false;"
-    arjs="trackingMethod: best; sourceType: webcam;"
+    arjs="trackingMethod: best; sourceType: webcam; debug: true;"
     id="model-container"
+    renderer="antialias: true; alpha: true"
   >
     <!-- Marker -->
     <a-marker type="hiro" id="hiroMarker">
@@ -63,6 +89,49 @@
   </a-scene>
 
   <script>
+    // Debug elements
+    const debugDiv = document.getElementById('debug');
+    const cameraStatus = document.getElementById('camera-status');
+    const debugLog = document.getElementById('debug-log');
+
+    // Log function
+    function log(message) {
+      debugLog.innerHTML += message + '<br>';
+      console.log(message);
+    }
+
+    // Check browser compatibility
+    log('Checking browser compatibility...');
+    log('User Agent: ' + navigator.userAgent);
+
+    // Check if WebGL is available
+    function webglAvailable() {
+      try {
+        const canvas = document.createElement('canvas');
+        return !!(window.WebGLRenderingContext && 
+          (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+      } catch(e) {
+        return false;
+      }
+    }
+    log('WebGL Available: ' + webglAvailable());
+
+    // Check camera access
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function(stream) {
+          cameraStatus.innerHTML = 'Camera accessed successfully';
+          stream.getTracks().forEach(track => track.stop()); // Stop the stream as AR.js will handle it
+        })
+        .catch(function(err) {
+          cameraStatus.innerHTML = 'Camera error: ' + err.message;
+          log('Camera Error: ' + err.message);
+        });
+    } else {
+      cameraStatus.innerHTML = 'getUserMedia not supported';
+      log('getUserMedia not supported by this browser');
+    }
+
     // Element references
     const fileInput = document.getElementById('fileInput');
     const model = document.getElementById('model');
@@ -89,13 +158,28 @@
         return;
       }
 
+      log('Loading model: ' + file.name);
       const blobURL = URL.createObjectURL(file);
-      // Use A-Frame gltf-model to load the GLB
       model.setAttribute('gltf-model', blobURL);
+      
+      // Log when model loads or fails
+      model.addEventListener('model-loaded', () => {
+        log('Model loaded successfully');
+      });
+      model.addEventListener('model-error', (error) => {
+        log('Model failed to load: ' + error.detail.src);
+      });
+    });
+
+    // Hide debug overlay after AR scene is ready
+    document.querySelector('a-scene').addEventListener('loaded', function () {
+      log('AR Scene loaded');
+      setTimeout(() => {
+        debugDiv.style.display = 'none';
+      }, 5000); // Hide after 5 seconds
     });
 
     // Gesture Handling
-    // We'll attach Hammer.js to the entire scene.
     const sceneEl = document.querySelector('a-scene');
     const hammer = new Hammer.Manager(sceneEl);
     
@@ -111,8 +195,6 @@
     let lastPanPosition = null;
 
     hammer.on('panmove', (ev) => {
-      // Move model with drag
-      // We'll move along x and y based on pan
       if (!lastPanPosition) lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
 
       currentPosition.x += (ev.deltaX - lastPanPosition.x) * 0.001;
@@ -131,7 +213,6 @@
     });
 
     hammer.on('pinchmove', (ev) => {
-      // Scale model with pinch
       const scaleChange = ev.scale - (initialScaleDistance || 1);
       const factor = 1 + scaleChange * 0.5;
       currentScale.x = currentScale.y = currentScale.z = Math.max(0.1, Math.min(5, factor));
@@ -143,17 +224,15 @@
     });
 
     hammer.on('swiperight', (ev) => {
-      // Rotate model with swipe
-      currentRotation.y += 15; // rotate 15 degrees per swipe right
+      currentRotation.y += 15;
       updateModelTransform();
     });
 
     hammer.on('swipeleft', (ev) => {
-      currentRotation.y -= 15; // rotate 15 degrees per swipe left
+      currentRotation.y -= 15;
       updateModelTransform();
     });
 
-    // Reset button
     resetBtn.addEventListener('click', () => {
       currentPosition = {...originalTransform.position};
       currentRotation = {...originalTransform.rotation};
