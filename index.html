@@ -13,11 +13,10 @@
             right: 0;
             padding: 20px;
             background: rgba(255, 255, 255, 0.9);
-            z-index: 9999;  /* Increased z-index */
+            z-index: 9999;
             display: flex;
             flex-direction: column;
             gap: 10px;
-            pointer-events: auto !important; /* Force pointer events */
         }
 
         .file-input-container {
@@ -37,6 +36,7 @@
             font-size: 16px;
             width: 100%;
             box-sizing: border-box;
+            z-index: 10000;
         }
 
         .bottom-controls {
@@ -46,11 +46,10 @@
             right: 0;
             padding: 20px;
             background: rgba(255, 255, 255, 0.9);
-            z-index: 9999;  /* Increased z-index */
+            z-index: 9999;
             display: flex;
             justify-content: center;
             gap: 15px;
-            pointer-events: auto !important; /* Force pointer events */
         }
 
         .control-button {
@@ -67,18 +66,10 @@
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            cursor: pointer;
-            pointer-events: auto !important; /* Force pointer events */
         }
 
         .control-button:active {
             background: #1976D2;
-            transform: scale(0.95);
-        }
-
-        /* Force UI elements above AR scene */
-        .a-canvas {
-            z-index: 1 !important; /* Force canvas below UI */
         }
     </style>
 </head>
@@ -91,11 +82,11 @@
     </div>
     
     <div class="bottom-controls">
-        <button class="control-button" onclick="scaleDown()">-</button>
-        <button class="control-button" onclick="scaleUp()">+</button>
-        <button class="control-button" onclick="rotateLeft()">↺</button>
-        <button class="control-button" onclick="rotateRight()">↻</button>
-        <button class="control-button" onclick="reset()">R</button>
+        <button class="control-button" id="scaleDownBtn">-</button>
+        <button class="control-button" id="scaleUpBtn">+</button>
+        <button class="control-button" id="rotateLeftBtn">↺</button>
+        <button class="control-button" id="rotateRightBtn">↻</button>
+        <button class="control-button" id="resetBtn">R</button>
     </div>
 
     <a-scene 
@@ -120,9 +111,9 @@
         let currentScale = 0.5;
         let currentRotation = 0;
 
-        // Handle file input
-        document.getElementById('file-input').addEventListener('change', function(event) {
-            event.stopPropagation();
+        // File input handling
+        const fileInput = document.getElementById('file-input');
+        fileInput.addEventListener('change', function(event) {
             const file = event.target.files[0];
             if (file) {
                 const url = URL.createObjectURL(file);
@@ -130,17 +121,13 @@
             }
         });
 
-        // Make all controls clickable
-        document.querySelectorAll('.control-button, #file-input').forEach(element => {
-            ['touchstart', 'touchend', 'click'].forEach(eventType => {
-                element.addEventListener(eventType, (e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                });
-            });
-        });
+        // Button event listeners
+        document.getElementById('scaleUpBtn').addEventListener('click', scaleUp);
+        document.getElementById('scaleDownBtn').addEventListener('click', scaleDown);
+        document.getElementById('rotateLeftBtn').addEventListener('click', rotateLeft);
+        document.getElementById('rotateRightBtn').addEventListener('click', rotateRight);
+        document.getElementById('resetBtn').addEventListener('click', reset);
 
-        // Scale controls
         function scaleUp() {
             currentScale += 0.1;
             updateScale();
@@ -155,7 +142,6 @@
             modelContainer.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
         }
 
-        // Rotation controls
         function rotateLeft() {
             currentRotation -= 45;
             updateRotation();
@@ -170,7 +156,6 @@
             modelContainer.setAttribute('rotation', `0 ${currentRotation} 0`);
         }
 
-        // Reset function
         function reset() {
             currentScale = 0.5;
             currentRotation = 0;
@@ -178,10 +163,17 @@
             updateRotation();
         }
 
-        // Ensure controls stay visible
-        window.addEventListener('load', () => {
-            document.querySelectorAll('.top-controls, .bottom-controls').forEach(el => {
-                el.style.zIndex = '9999';
+        // Prevent AR.js from capturing touch events on controls
+        const controls = document.querySelectorAll('.control-button, #file-input');
+        controls.forEach(control => {
+            control.addEventListener('touchstart', e => {
+                e.stopPropagation();
+            });
+            control.addEventListener('touchend', e => {
+                e.stopPropagation();
+            });
+            control.addEventListener('click', e => {
+                e.stopPropagation();
             });
         });
     </script>
