@@ -2,54 +2,97 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Basic AR Test</title>
+    <title>Mobile AR Viewer</title>
     <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@1.3.0/dist/aframe-master.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
-        .buttons {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 5em;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 10;
-        }
-        
-        .buttons button {
-            padding: 0.25em;
-            border-radius: 4px;
-            border: none;
-            background: white;
-            margin: 0.25em;
-            width: 2em;
-            height: 2em;
-        }
-
-        #file-input {
+        .top-controls {
             position: fixed;
             top: 0;
             left: 0;
-            z-index: 10;
-            background: white;
-            padding: 1em;
+            right: 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .file-input-container {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .file-input-container label {
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            color: #333;
+        }
+
+        #file-input {
+            padding: 10px;
+            font-size: 16px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .bottom-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .control-button {
+            width: 50px;
+            height: 50px;
+            font-size: 24px;
+            border: none;
+            border-radius: 25px;
+            background: #2196F3;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .control-button:active {
+            background: #1976D2;
+            transform: scale(0.95);
         }
     </style>
 </head>
-<body style="margin: 0;">
-    <input type="file" id="file-input" accept=".glb">
+<body style="margin: 0; overflow: hidden;">
+    <div class="top-controls">
+        <div class="file-input-container">
+            <label for="file-input">Choose 3D Model (GLB)</label>
+            <input type="file" id="file-input" accept=".glb">
+        </div>
+    </div>
     
-    <div class="buttons">
-        <button onclick="scaleUp()">+</button>
-        <button onclick="scaleDown()">-</button>
-        <button onclick="rotateLeft()">↶</button>
-        <button onclick="rotateRight()">↷</button>
-        <button onclick="reset()">R</button>
+    <div class="bottom-controls">
+        <button class="control-button" onclick="scaleDown()">-</button>
+        <button class="control-button" onclick="scaleUp()">+</button>
+        <button class="control-button" onclick="rotateLeft()">↺</button>
+        <button class="control-button" onclick="rotateRight()">↻</button>
+        <button class="control-button" onclick="reset()">R</button>
     </div>
 
-    <a-scene embedded arjs="trackingMethod: best;">
+    <a-scene 
+        embedded 
+        arjs="trackingMethod: best;"
+        renderer="logarithmicDepthBuffer: true;">
         <a-marker preset="hiro">
             <a-entity id="model-container" position="0 0 0" scale="0.5 0.5 0.5"></a-entity>
         </a-marker>
@@ -60,6 +103,15 @@
         const modelContainer = document.getElementById('model-container');
         let currentScale = 0.5;
         let currentRotation = 0;
+
+        // Prevent default touch behaviors
+        document.querySelectorAll('.control-button, #file-input').forEach(element => {
+            ['touchstart', 'touchend', 'click'].forEach(eventType => {
+                element.addEventListener(eventType, (e) => {
+                    e.stopPropagation();
+                });
+            });
+        });
 
         // File input handling
         document.getElementById('file-input').onchange = function(event) {
@@ -107,17 +159,6 @@
             updateScale();
             updateRotation();
         }
-
-        // Make buttons actually clickable
-        document.querySelectorAll('button').forEach(button => {
-            button.addEventListener('touchstart', function(e) {
-                e.stopPropagation();
-            });
-        });
-
-        document.getElementById('file-input').addEventListener('touchstart', function(e) {
-            e.stopPropagation();
-        });
     </script>
 </body>
 </html>
