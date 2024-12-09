@@ -1,213 +1,123 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AR Viewer with Hiro Marker</title>
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <!-- AR.js with improved camera settings -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-  <!-- Hammer.js for gesture handling -->
-  <script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Basic AR Test</title>
+    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@1.3.0/dist/aframe-master.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <style>
+        .buttons {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 5em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        
+        .buttons button {
+            padding: 0.25em;
+            border-radius: 4px;
+            border: none;
+            background: white;
+            margin: 0.25em;
+            width: 2em;
+            height: 2em;
+        }
 
-  <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      overflow: hidden;
-    }
-    #ui-container {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 999;
-      background: rgba(255,255,255,0.8);
-      padding: 10px;
-      border-radius: 4px;
-    }
-    #ui-container label, #ui-container button {
-      display: block;
-      margin-bottom: 10px;
-    }
-    .arjs-loader {
-      height: 100%;
-      width: 100%;
-      position: fixed;
-      top: 0;
-      left: 0;
-      background-color: rgba(0, 0, 0, 0.8);
-      z-index: 9999;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .arjs-loader div {
-      text-align: center;
-      font-size: 1.25em;
-      color: white;
-    }
-  </style>
+        #file-input {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 10;
+            background: white;
+            padding: 1em;
+        }
+    </style>
 </head>
-<body>
-  <!-- Loading screen -->
-  <div class="arjs-loader">
-    <div>Loading, please wait...</div>
-  </div>
-
-  <div id="ui-container">
-    <label>
-      Load GLB Model (max 70MB):
-      <input type="file" id="fileInput" accept=".glb" />
-    </label>
-    <button id="resetBtn">Reset Model</button>
-    <p>Use pinch to scale, swipe to rotate, and drag to move the model.</p>
-  </div>
-
-  <a-scene
-    embedded
-    vr-mode-ui="enabled: false"
-    arjs='sourceType: webcam; 
-          sourceWidth:1280; 
-          sourceHeight:960; 
-          displayWidth: 1280; 
-          displayHeight: 960; 
-          debugUIEnabled: false; 
-          detectionMode: mono_and_matrix;
-          imageTargetSmoothingFactor: 0.8;'
-    renderer="antialias: true; logarithmicDepthBuffer: true; precision: high; alpha: true"
-    inspector="url: https://cdn.jsdelivr.net/gh/aframevr/aframe-inspector@master/dist/aframe-inspector.min.js"
-  >
-    <a-camera gps-camera rotation-reader>
-      <a-entity
-        cursor="fuse: false; rayOrigin: mouse;"
-        raycaster="far: ${customFields.libVersion}; interval: 1000; objects: .clickable">
-      </a-entity>
-    </a-camera>
-
-    <a-marker type="hiro"
-              smooth="true"
-              smoothCount="5"
-              smoothTolerance="0.01"
-              smoothThreshold="2"
-              raycaster="objects: .clickable"
-              emitevents="true"
-              cursor="fuse: false; rayOrigin: mouse;"
-              id="hiroMarker">
-      <a-entity id="model"
-                position="0 0 0"
-                rotation="0 0 0"
-                scale="0.5 0.5 0.5">
-      </a-entity>
-    </a-marker>
-  </a-scene>
-
-  <script>
-    // Hide loader when scene is ready
-    document.querySelector('a-scene').addEventListener('loaded', function() {
-      document.querySelector('.arjs-loader').style.display = 'none';
-    });
-
-    // Element references
-    const fileInput = document.getElementById('fileInput');
-    const model = document.getElementById('model');
-    const resetBtn = document.getElementById('resetBtn');
-
-    // Original transform values
-    const originalTransform = {
-      position: {x:0, y:0, z:0},
-      rotation: {x:0, y:0, z:0},
-      scale: {x:0.5, y:0.5, z:0.5}
-    };
-
-    let currentScale = {...originalTransform.scale};
-    let currentRotation = {...originalTransform.rotation};
-    let currentPosition = {...originalTransform.position};
-
-    // Load model after file selection
-    fileInput.addEventListener('change', function(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      if (file.size > 70 * 1024 * 1024) {
-        alert("File is too large! Please choose a file smaller than 70MB.");
-        return;
-      }
-
-      const blobURL = URL.createObjectURL(file);
-      model.setAttribute('gltf-model', blobURL);
-      resetTransform();
-    });
-
-    // Gesture Handling
-    const sceneEl = document.querySelector('a-scene');
-    const hammer = new Hammer.Manager(sceneEl);
+<body style="margin: 0;">
+    <input type="file" id="file-input" accept=".glb">
     
-    // Add gesture recognizers
-    const pan = new Hammer.Pan({ direction: Hammer.DIRECTION_ALL, threshold: 0 });
-    const pinch = new Hammer.Pinch({ threshold: 0 });
-    const rotate = new Hammer.Rotate({ threshold: 0 });
-    const swipe = new Hammer.Swipe({ direction: Hammer.DIRECTION_HORIZONTAL });
+    <div class="buttons">
+        <button onclick="scaleUp()">+</button>
+        <button onclick="scaleDown()">-</button>
+        <button onclick="rotateLeft()">↶</button>
+        <button onclick="rotateRight()">↷</button>
+        <button onclick="reset()">R</button>
+    </div>
 
-    hammer.add([pan, pinch, rotate, swipe]);
+    <a-scene embedded arjs="trackingMethod: best;">
+        <a-marker preset="hiro">
+            <a-entity id="model-container" position="0 0 0" scale="0.5 0.5 0.5"></a-entity>
+        </a-marker>
+        <a-entity camera></a-entity>
+    </a-scene>
 
-    let initialScaleDistance = null;
-    let lastPanPosition = null;
+    <script>
+        const modelContainer = document.getElementById('model-container');
+        let currentScale = 0.5;
+        let currentRotation = 0;
 
-    hammer.on('panmove', (ev) => {
-      if (!lastPanPosition) lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
+        // File input handling
+        document.getElementById('file-input').onchange = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                modelContainer.setAttribute('gltf-model', url);
+            }
+        };
 
-      currentPosition.x += (ev.deltaX - lastPanPosition.x) * 0.0005;
-      currentPosition.y += (-(ev.deltaY - lastPanPosition.y)) * 0.0005;
-      lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
+        // Scale controls
+        function scaleUp() {
+            currentScale += 0.1;
+            updateScale();
+        }
 
-      updateModelTransform();
-    });
+        function scaleDown() {
+            currentScale = Math.max(0.1, currentScale - 0.1);
+            updateScale();
+        }
 
-    hammer.on('panend', () => {
-      lastPanPosition = null;
-    });
+        function updateScale() {
+            modelContainer.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+        }
 
-    hammer.on('pinchstart', (ev) => {
-      initialScaleDistance = ev.scale;
-    });
+        // Rotation controls
+        function rotateLeft() {
+            currentRotation -= 45;
+            updateRotation();
+        }
 
-    hammer.on('pinchmove', (ev) => {
-      const scaleChange = ev.scale - (initialScaleDistance || 1);
-      const factor = 1 + scaleChange * 0.25;
-      const newScale = originalTransform.scale.x * factor;
-      currentScale.x = currentScale.y = currentScale.z = Math.max(0.1, Math.min(2, newScale));
-      updateModelTransform();
-    });
+        function rotateRight() {
+            currentRotation += 45;
+            updateRotation();
+        }
 
-    hammer.on('pinchend', () => {
-      initialScaleDistance = null;
-    });
+        function updateRotation() {
+            modelContainer.setAttribute('rotation', `0 ${currentRotation} 0`);
+        }
 
-    hammer.on('swiperight', (ev) => {
-      currentRotation.y += 15;
-      updateModelTransform();
-    });
+        // Reset function
+        function reset() {
+            currentScale = 0.5;
+            currentRotation = 0;
+            updateScale();
+            updateRotation();
+        }
 
-    hammer.on('swipeleft', (ev) => {
-      currentRotation.y -= 15;
-      updateModelTransform();
-    });
+        // Make buttons actually clickable
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('touchstart', function(e) {
+                e.stopPropagation();
+            });
+        });
 
-    resetBtn.addEventListener('click', resetTransform);
-
-    function resetTransform() {
-      currentPosition = {...originalTransform.position};
-      currentRotation = {...originalTransform.rotation};
-      currentScale = {...originalTransform.scale};
-      updateModelTransform();
-    }
-
-    function updateModelTransform() {
-      model.setAttribute('position', `${currentPosition.x} ${currentPosition.y} ${currentPosition.z}`);
-      model.setAttribute('rotation', `${currentRotation.x} ${currentRotation.y} ${currentRotation.z}`);
-      model.setAttribute('scale', `${currentScale.x} ${currentScale.y} ${currentScale.z}`);
-    }
-  </script>
+        document.getElementById('file-input').addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        });
+    </script>
 </body>
 </html>
