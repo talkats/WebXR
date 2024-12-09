@@ -1,36 +1,202 @@
 <!DOCTYPE html>
-<html lang="he">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>AR GLB Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR AR Experience</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar.js"></script>
     <style>
-        body { margin: 0; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #upload-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #reset-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #file-size-warning {
+            color: red;
+            display: none;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
-    <!-- ייבוא ספריות A-Frame ו-AR.js -->
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
-
-    <!-- סצנה של A-Frame עם תוכן AR -->
-    <a-scene embedded arjs='sourceType: webcam;'>
-        <a-marker preset="hiro">
-            <a-entity gltf-model="url(https://github.com/talkats/WebXR/blob/main/heartclear.glb)" scale="0.5 0.5 0.5" position="0 0 0"></a-entity>
-        </a-marker>
-        <a-entity camera></a-entity>
-    </a-scene>
+    <div id="upload-container">
+        <input type="file" id="glb-upload" accept=".glb">
+        <div id="file-size-warning">File size must be under 70MB</div>
+    </div>
+    <button id="reset-button">Reset Model</button>
 
     <script>
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(function(stream) {
-                console.log("Camera access granted");
-            })
-            .catch(function(err) {
-                alert("Camera access denied: " + err.message);
-                console.error("Camera access denied: ", err);
+        let model, scene, camera, renderer, arToolkitSource, arToolkitContext;
+        let initialScale = new THREE.Vector3(1, 1, 1);
+        let initialPosition = new THREE.Vector3(0, 0, 0);
+        let initialRotation = new THREE.Euler(0, 0, 0);
+
+        // Initialize AR scene
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.Camera();
+            scene.add(camera);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true
             });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // AR.js initialization
+            arToolkitSource = new THREEx.ArToolkitSource({
+                sourceType: 'webcam',
+            });
+
+            arToolkitContext = new THREEx.ArToolkitContext({
+                cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
+                detectionMode: 'mono',
+                patternRatio: 0.5,
+                type: 'pattern',
+                patternUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro'
+            });
+
+            // Handle resize
+            arToolkitSource.init(() => {
+                setTimeout(() => {
+                    onResize();
+                }, 2000);
+            });
+
+            window.addEventListener('resize', onResize);
+        }
+
+        function onResize() {
+            arToolkitSource.onResizeElement();
+            arToolkitSource.copyElementSizeTo(renderer.domElement);
+            if (arToolkitContext.arController !== null) {
+                arToolkitSource.copyElementSizeTo(arToolkitContext.arController.canvas);
+            }
+        }
+
+        // Handle file upload
+        document.getElementById('glb-upload').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const maxSize = 70 * 1024 * 1024; // 70MB in bytes
+
+            if (file.size > maxSize) {
+                document.getElementById('file-size-warning').style.display = 'block';
+                return;
+            }
+
+            document.getElementById('file-size-warning').style.display = 'none';
+
+            const loader = new THREE.GLTFLoader();
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const arrayBuffer = e.target.result;
+                loader.parse(arrayBuffer, '', function(gltf) {
+                    if (model) {
+                        scene.remove(model);
+                    }
+
+                    model = gltf.scene;
+                    // Store initial transform
+                    initialScale.copy(model.scale);
+                    initialPosition.copy(model.position);
+                    initialRotation.copy(model.rotation);
+
+                    // Center and scale model
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    model.position.sub(center);
+                    
+                    scene.add(model);
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Reset button handler
+        document.getElementById('reset-button').addEventListener('click', function() {
+            if (model) {
+                model.scale.copy(initialScale);
+                model.position.copy(initialPosition);
+                model.rotation.copy(initialRotation);
+            }
+        });
+
+        // Gesture controls
+        let touchStartX, touchStartY;
+        let modelStartRotation, modelStartScale, modelStartPosition;
+
+        renderer.domElement.addEventListener('touchstart', function(event) {
+            touchStartX = event.touches[0].clientX;
+            touchStartY = event.touches[0].clientY;
+
+            if (model) {
+                modelStartRotation = model.rotation.y;
+                modelStartScale = model.scale.x;
+                modelStartPosition = model.position.clone();
+            }
+        });
+
+        renderer.domElement.addEventListener('touchmove', function(event) {
+            if (!model) return;
+
+            const touchX = event.touches[0].clientX;
+            const touchY = event.touches[0].clientY;
+            const deltaX = touchX - touchStartX;
+            const deltaY = touchY - touchStartY;
+
+            // Rotation (single finger)
+            if (event.touches.length === 1) {
+                model.rotation.y = modelStartRotation + (deltaX * 0.01);
+            }
+            // Scale (pinch)
+            else if (event.touches.length === 2) {
+                const touch1 = event.touches[0];
+                const touch2 = event.touches[1];
+                const dist = Math.hypot(
+                    touch1.clientX - touch2.clientX,
+                    touch1.clientY - touch2.clientY
+                );
+                const scale = modelStartScale * (1 + (deltaY * 0.01));
+                model.scale.setScalar(Math.max(0.1, Math.min(3, scale)));
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (arToolkitSource.ready) {
+                arToolkitContext.update(arToolkitSource.domElement);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Start everything
+        init();
+        animate();
     </script>
 </body>
 </html>
