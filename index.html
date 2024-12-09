@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>AR Viewer</title>
+    <!-- Load A-Frame and AR.js -->
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
@@ -12,6 +13,7 @@
             overflow: hidden;
         }
 
+        /* UI Overlay to allow file upload and mode switching */
         #ui-overlay {
             position: fixed;
             top: 20px;
@@ -65,7 +67,9 @@
 </head>
 <body>
     <div id="ui-overlay">
+        <!-- File input for uploading GLB model -->
         <input type="file" id="file-input" accept=".glb" aria-label="Upload GLB file">
+        <!-- Buttons to switch between marker-based mode and a simple "markerless" mode -->
         <div class="mode-select">
             <button class="mode-btn active" id="markerBtn">Use Marker</button>
             <button class="mode-btn" id="markerlessBtn">No Marker</button>
@@ -73,11 +77,19 @@
         <div id="status"></div>
     </div>
 
+    <!-- Scene Setup:
+         - We use AR.js through arjs attribute for marker-based mode.
+         - For markerless, we will remove that attribute to simply show a 3D model in front of the camera
+           without AR tracking. This is not true AR plane detection, just a static model. -->
     <a-scene 
         embedded
-        vr-mode-ui="enabled: false">
+        vr-mode-ui="enabled: false"
+        id="scene">
         
-        <!-- Marker-based entity with improved detection settings -->
+        <!-- Marker-based tracking entity:
+             preset="hiro" means it uses the default Hiro marker.
+             smooth, smoothCount, and other attributes help stabilize tracking.
+             We place an entity (marker-model) that will hold the loaded GLB. -->
         <a-marker 
             id="hiro-marker" 
             preset="hiro"
@@ -96,105 +108,124 @@
             </a-entity>
         </a-marker>
 
-        <!-- Markerless entity -->
+        <!-- Markerless entity:
+             We will show this model when in markerless mode.
+             It will simply appear in front of the camera without tracking. -->
         <a-entity 
             id="markerless-model" 
             visible="false" 
             position="0 0 -3">
         </a-entity>
 
+        <!-- Camera for viewing the scene -->
         <a-camera id="camera" position="0 0 0">
             <a-cursor id="cursor" visible="false"></a-cursor>
         </a-camera>
     </a-scene>
 
     <script>
-        let currentMode = 'marker';
+        let currentMode = 'marker'; // start in marker mode
+
         const markerBtn = document.getElementById('markerBtn');
         const markerlessBtn = document.getElementById('markerlessBtn');
         const status = document.getElementById('status');
         const markerModel = document.getElementById('marker-model');
         const markerlessModel = document.getElementById('markerless-model');
-        const scene = document.querySelector('a-scene');
+        const scene = document.getElementById('scene');
         const hiroMarker = document.getElementById('hiro-marker');
         const cursor = document.getElementById('cursor');
 
+        // Helper function to show status messages to the user
         function showStatus(message) {
             status.textContent = message;
         }
 
+        // Set the mode to either marker-based or markerless
         function setMode(mode) {
             currentMode = mode;
             if (mode === 'marker') {
-                markerBtn.classList.add('active');
-                markerlessBtn.classList.remove('active');
-                // Improved AR.js settings for better detection
-                scene.setAttribute('arjs', {
-                    sourceType: 'webcam',
-                    debugUIEnabled: false,
-                    detectionMode: 'mono_and_matrix',
-                    matrixCodeType: '3x3',
-                    sourceWidth: 1280,
-                    sourceHeight: 960,
-                    displayWidth: 1280,
-                    displayHeight: 960,
-                    maxDetectionRate: 60,
-                    canvasWidth: 1280,
-                    canvasHeight: 960,
-                    patternRatio: 0.75
-                });
+                // Marker mode: enable AR.js by setting appropriate attributes.
+                // Must be a string of key-value pairs separated by semicolons.
+                // We remove the markerless scenario by setting the attributes needed for AR.js.
+                scene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; patternRatio: 0.75;');
+                
+                // Show marker entities
                 hiroMarker.setAttribute('visible', true);
                 markerlessModel.setAttribute('visible', false);
                 cursor.setAttribute('visible', false);
+
+                markerBtn.classList.add('active');
+                markerlessBtn.classList.remove('active');
+
                 showStatus('Point camera at Hiro marker');
             } else {
+                // Markerless mode: remove AR.js for simplicity.
+                // This will NOT provide true AR plane detection; it's just a static model in front of the camera.
+                scene.removeAttribute('arjs');
+                
+                // Hide the marker-based model
+                hiroMarker.setAttribute('visible', false);
+                // Show the markerless model
+                markerlessModel.setAttribute('visible', true);
+                cursor.setAttribute('visible', true); // enable cursor if needed
+
                 markerBtn.classList.remove('active');
                 markerlessBtn.classList.add('active');
-                scene.removeAttribute('arjs');
-                hiroMarker.setAttribute('visible', false);
-                markerlessModel.setAttribute('visible', true);
-                cursor.setAttribute('visible', true);
-                showStatus('Model will appear in front of camera');
+
+                showStatus('Model will appear in front of camera (no AR tracking)');
             }
         }
 
-        // Add marker detection feedback
+        // Add marker detection feedback:
+        // When the marker is found, update the status message.
         hiroMarker.addEventListener('markerFound', () => {
-            showStatus('Marker detected! Loading model...');
+            if (currentMode === 'marker') {
+                showStatus('Marker detected! Model should be visible.');
+            }
         });
 
+        // When the marker is lost, prompt the user to find it again.
         hiroMarker.addEventListener('markerLost', () => {
-            showStatus('Marker lost - Please point at the Hiro marker');
+            if (currentMode === 'marker') {
+                showStatus('Marker lost - Point camera at the Hiro marker');
+            }
         });
 
+        // Mode switching buttons
         markerBtn.onclick = () => setMode('marker');
         markerlessBtn.onclick = () => setMode('markerless');
 
+        // Handle file input:
+        // When a GLB file is chosen, load it into the current mode's model entity.
         document.getElementById('file-input').addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
                 showStatus('Loading model...');
                 const url = URL.createObjectURL(file);
                 
+                // Determine which model entity to load the GLB into, based on current mode
                 const targetModel = currentMode === 'marker' ? markerModel : markerlessModel;
                 targetModel.setAttribute('gltf-model', url);
                 
+                // Listen for the model to load successfully
                 targetModel.addEventListener('model-loaded', () => {
                     showStatus(currentMode === 'marker' ? 
                         'Model loaded - Point camera at Hiro marker' : 
-                        'Model loaded - Look around to view');
+                        'Model loaded - Look forward to see it');
                 }, { once: true });
                 
+                // Listen for any loading errors
                 targetModel.addEventListener('model-error', () => {
                     showStatus('Error loading model');
                 }, { once: true });
             }
         });
 
-        // Initialize marker mode
+        // Initialize scene in marker mode by default
         setMode('marker');
 
-        // Prevent AR.js from capturing UI events
+        // Prevent AR.js from blocking UI touch events:
+        // Stopping propagation so that touching the UI elements won't get confused as AR events.
         document.querySelectorAll('.mode-btn, #file-input').forEach(el => {
             el.addEventListener('touchstart', (e) => e.stopPropagation());
             el.addEventListener('touchend', (e) => e.stopPropagation());
