@@ -16,6 +16,7 @@
       margin: 0;
       font-family: sans-serif;
       background: #f0f0f0;
+      overflow: hidden;
     }
     #ui-container {
       position: absolute;
@@ -34,34 +35,24 @@
       width: 100vw;
       height: 100vh;
     }
-    #debug {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      z-index: 1000;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      max-width: 80%;
-      text-align: center;
+    /* Add zoom controls styling */
+    #zoom-controls {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 999;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      border-radius: 4px;
     }
-    #debug-log {
-      margin-top: 10px;
-      color: #666;
-      font-size: 14px;
+    .zoom-btn {
+      margin: 5px;
+      padding: 5px 15px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <!-- Debug overlay -->
-  <div id="debug">
-    <strong>AR Debug Status</strong><br>
-    Camera Status: <span id="camera-status">Waiting...</span><br>
-    <div id="debug-log"></div>
-  </div>
-
   <div id="ui-container">
     <label>
       Load GLB Model (max 70MB):
@@ -71,15 +62,21 @@
     <p>Use pinch to scale, swipe to rotate, and drag to move the model.</p>
   </div>
 
+  <!-- Add zoom controls -->
+  <div id="zoom-controls">
+    <button class="zoom-btn" id="zoomIn">+</button>
+    <button class="zoom-btn" id="zoomOut">-</button>
+  </div>
+
   <a-scene
     embedded
     vr-mode-ui="enabled: false;"
-    arjs="trackingMethod: best; sourceType: webcam; debug: true;"
+    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; cameraParametersUrl: https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/camera_para.dat;"
     id="model-container"
     renderer="antialias: true; alpha: true"
   >
     <!-- Marker -->
-    <a-marker type="hiro" id="hiroMarker">
+    <a-marker type="hiro" id="hiroMarker" smooth="true" smoothCount="5">
       <a-entity id="model"
                 rotation="0 0 0"
                 position="0 0 0"
@@ -89,64 +86,45 @@
   </a-scene>
 
   <script>
-    // Debug elements
-    const debugDiv = document.getElementById('debug');
-    const cameraStatus = document.getElementById('camera-status');
-    const debugLog = document.getElementById('debug-log');
-
-    // Log function
-    function log(message) {
-      debugLog.innerHTML += message + '<br>';
-      console.log(message);
-    }
-
-    // Check browser compatibility
-    log('Checking browser compatibility...');
-    log('User Agent: ' + navigator.userAgent);
-
-    // Check if WebGL is available
-    function webglAvailable() {
-      try {
-        const canvas = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext && 
-          (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
-      } catch(e) {
-        return false;
-      }
-    }
-    log('WebGL Available: ' + webglAvailable());
-
-    // Check camera access
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(function(stream) {
-          cameraStatus.innerHTML = 'Camera accessed successfully';
-          stream.getTracks().forEach(track => track.stop()); // Stop the stream as AR.js will handle it
-        })
-        .catch(function(err) {
-          cameraStatus.innerHTML = 'Camera error: ' + err.message;
-          log('Camera Error: ' + err.message);
-        });
-    } else {
-      cameraStatus.innerHTML = 'getUserMedia not supported';
-      log('getUserMedia not supported by this browser');
-    }
-
     // Element references
     const fileInput = document.getElementById('fileInput');
     const model = document.getElementById('model');
     const resetBtn = document.getElementById('resetBtn');
+    const zoomIn = document.getElementById('zoomIn');
+    const zoomOut = document.getElementById('zoomOut');
 
     // Original transform values
     const originalTransform = {
       position: {x:0, y:0, z:0},
       rotation: {x:0, y:0, z:0},
-      scale: {x:1, y:1, z:1}
+      scale: {x:0.5, y:0.5, z:0.5} // Reduced initial scale
     };
 
-    let currentScale = {x:1, y:1, z:1};
-    let currentRotation = {x:0, y:0, z:0};
-    let currentPosition = {x:0, y:0, z:0};
+    let currentScale = {...originalTransform.scale};
+    let currentRotation = {...originalTransform.rotation};
+    let currentPosition = {...originalTransform.position};
+
+    // Zoom controls
+    let zoomLevel = 1;
+    const zoomStep = 0.1;
+
+    zoomIn.addEventListener('click', () => {
+      zoomLevel += zoomStep;
+      updateZoom();
+    });
+
+    zoomOut.addEventListener('click', () => {
+      zoomLevel = Math.max(0.1, zoomLevel - zoomStep);
+      updateZoom();
+    });
+
+    function updateZoom() {
+      const scene = document.querySelector('a-scene');
+      if (scene.camera) {
+        scene.camera.zoom = zoomLevel;
+        scene.camera.updateProjectionMatrix();
+      }
+    }
 
     // Load model after file selection
     fileInput.addEventListener('change', function(event) {
@@ -158,25 +136,11 @@
         return;
       }
 
-      log('Loading model: ' + file.name);
       const blobURL = URL.createObjectURL(file);
       model.setAttribute('gltf-model', blobURL);
       
-      // Log when model loads or fails
-      model.addEventListener('model-loaded', () => {
-        log('Model loaded successfully');
-      });
-      model.addEventListener('model-error', (error) => {
-        log('Model failed to load: ' + error.detail.src);
-      });
-    });
-
-    // Hide debug overlay after AR scene is ready
-    document.querySelector('a-scene').addEventListener('loaded', function () {
-      log('AR Scene loaded');
-      setTimeout(() => {
-        debugDiv.style.display = 'none';
-      }, 5000); // Hide after 5 seconds
+      // Reset transform when loading new model
+      resetTransform();
     });
 
     // Gesture Handling
@@ -197,8 +161,8 @@
     hammer.on('panmove', (ev) => {
       if (!lastPanPosition) lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
 
-      currentPosition.x += (ev.deltaX - lastPanPosition.x) * 0.001;
-      currentPosition.y += (-(ev.deltaY - lastPanPosition.y)) * 0.001;
+      currentPosition.x += (ev.deltaX - lastPanPosition.x) * 0.0005; // Reduced sensitivity
+      currentPosition.y += (-(ev.deltaY - lastPanPosition.y)) * 0.0005; // Reduced sensitivity
       lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
 
       updateModelTransform();
@@ -214,8 +178,9 @@
 
     hammer.on('pinchmove', (ev) => {
       const scaleChange = ev.scale - (initialScaleDistance || 1);
-      const factor = 1 + scaleChange * 0.5;
-      currentScale.x = currentScale.y = currentScale.z = Math.max(0.1, Math.min(5, factor));
+      const factor = 1 + scaleChange * 0.25; // Reduced scaling sensitivity
+      const newScale = originalTransform.scale.x * factor;
+      currentScale.x = currentScale.y = currentScale.z = Math.max(0.1, Math.min(2, newScale));
       updateModelTransform();
     });
 
@@ -233,12 +198,17 @@
       updateModelTransform();
     });
 
-    resetBtn.addEventListener('click', () => {
+    // Reset functionality
+    resetBtn.addEventListener('click', resetTransform);
+
+    function resetTransform() {
       currentPosition = {...originalTransform.position};
       currentRotation = {...originalTransform.rotation};
       currentScale = {...originalTransform.scale};
+      zoomLevel = 1;
+      updateZoom();
       updateModelTransform();
-    });
+    }
 
     function updateModelTransform() {
       model.setAttribute('position', `${currentPosition.x} ${currentPosition.y} ${currentPosition.z}`);
