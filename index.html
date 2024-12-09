@@ -1,202 +1,171 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>AR GLB Viewer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar.js"></script>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-        }
-        #upload-container {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-        }
-        #reset-button {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 100;
-            padding: 10px 20px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        #file-size-warning {
-            color: red;
-            display: none;
-            margin-top: 5px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AR Viewer with Hiro Marker</title>
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <!-- AR.js -->
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar.js"></script>
+  <!-- Hammer.js for gesture handling -->
+  <script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f0f0f0;
+    }
+    #ui-container {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 999;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      border-radius: 4px;
+    }
+    #ui-container label, #ui-container button {
+      display: block;
+      margin-bottom: 10px;
+    }
+    #model-container {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
 </head>
 <body>
-    <div id="upload-container">
-        <input type="file" id="glb-upload" accept=".glb">
-        <div id="file-size-warning">File size must be under 70MB</div>
-    </div>
-    <button id="reset-button">Reset Model</button>
+  <div id="ui-container">
+    <label>
+      Load GLB Model (max 70MB):
+      <input type="file" id="fileInput" accept=".glb" />
+    </label>
+    <button id="resetBtn">Reset Model</button>
+    <p>Use pinch to scale, swipe to rotate, and drag to move the model.</p>
+  </div>
 
-    <script>
-        let model, scene, camera, renderer, arToolkitSource, arToolkitContext;
-        let initialScale = new THREE.Vector3(1, 1, 1);
-        let initialPosition = new THREE.Vector3(0, 0, 0);
-        let initialRotation = new THREE.Euler(0, 0, 0);
+  <a-scene
+    embedded
+    vr-mode-ui="enabled: false;"
+    arjs="trackingMethod: best; sourceType: webcam;"
+    id="model-container"
+  >
+    <!-- Marker -->
+    <a-marker type="hiro" id="hiroMarker">
+      <a-entity id="model"
+                rotation="0 0 0"
+                position="0 0 0"
+                scale="1 1 1"></a-entity>
+    </a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
 
-        // Initialize AR scene
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.Camera();
-            scene.add(camera);
+  <script>
+    // Element references
+    const fileInput = document.getElementById('fileInput');
+    const model = document.getElementById('model');
+    const resetBtn = document.getElementById('resetBtn');
 
-            renderer = new THREE.WebGLRenderer({
-                antialias: true,
-                alpha: true
-            });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
+    // Original transform values
+    const originalTransform = {
+      position: {x:0, y:0, z:0},
+      rotation: {x:0, y:0, z:0},
+      scale: {x:1, y:1, z:1}
+    };
 
-            // AR.js initialization
-            arToolkitSource = new THREEx.ArToolkitSource({
-                sourceType: 'webcam',
-            });
+    let currentScale = {x:1, y:1, z:1};
+    let currentRotation = {x:0, y:0, z:0};
+    let currentPosition = {x:0, y:0, z:0};
 
-            arToolkitContext = new THREEx.ArToolkitContext({
-                cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
-                detectionMode: 'mono',
-                patternRatio: 0.5,
-                type: 'pattern',
-                patternUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/patt.hiro'
-            });
+    // Load model after file selection
+    fileInput.addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
 
-            // Handle resize
-            arToolkitSource.init(() => {
-                setTimeout(() => {
-                    onResize();
-                }, 2000);
-            });
+      if (file.size > 70 * 1024 * 1024) {
+        alert("File is too large! Please choose a file smaller than 70MB.");
+        return;
+      }
 
-            window.addEventListener('resize', onResize);
-        }
+      const blobURL = URL.createObjectURL(file);
+      // Use A-Frame gltf-model to load the GLB
+      model.setAttribute('gltf-model', blobURL);
+    });
 
-        function onResize() {
-            arToolkitSource.onResizeElement();
-            arToolkitSource.copyElementSizeTo(renderer.domElement);
-            if (arToolkitContext.arController !== null) {
-                arToolkitSource.copyElementSizeTo(arToolkitContext.arController.canvas);
-            }
-        }
+    // Gesture Handling
+    // We'll attach Hammer.js to the entire scene.
+    const sceneEl = document.querySelector('a-scene');
+    const hammer = new Hammer.Manager(sceneEl);
+    
+    // Add gesture recognizers
+    const pan = new Hammer.Pan({ direction: Hammer.DIRECTION_ALL, threshold: 0 });
+    const pinch = new Hammer.Pinch({ threshold: 0 });
+    const rotate = new Hammer.Rotate({ threshold: 0 });
+    const swipe = new Hammer.Swipe({ direction: Hammer.DIRECTION_HORIZONTAL });
 
-        // Handle file upload
-        document.getElementById('glb-upload').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            const maxSize = 70 * 1024 * 1024; // 70MB in bytes
+    hammer.add([pan, pinch, rotate, swipe]);
 
-            if (file.size > maxSize) {
-                document.getElementById('file-size-warning').style.display = 'block';
-                return;
-            }
+    let initialScaleDistance = null;
+    let lastPanPosition = null;
 
-            document.getElementById('file-size-warning').style.display = 'none';
+    hammer.on('panmove', (ev) => {
+      // Move model with drag
+      // We'll move along x and y based on pan
+      if (!lastPanPosition) lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
 
-            const loader = new THREE.GLTFLoader();
-            const reader = new FileReader();
+      currentPosition.x += (ev.deltaX - lastPanPosition.x) * 0.001;
+      currentPosition.y += (-(ev.deltaY - lastPanPosition.y)) * 0.001;
+      lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
 
-            reader.onload = function(e) {
-                const arrayBuffer = e.target.result;
-                loader.parse(arrayBuffer, '', function(gltf) {
-                    if (model) {
-                        scene.remove(model);
-                    }
+      updateModelTransform();
+    });
 
-                    model = gltf.scene;
-                    // Store initial transform
-                    initialScale.copy(model.scale);
-                    initialPosition.copy(model.position);
-                    initialRotation.copy(model.rotation);
+    hammer.on('panend', () => {
+      lastPanPosition = null;
+    });
 
-                    // Center and scale model
-                    const box = new THREE.Box3().setFromObject(model);
-                    const center = box.getCenter(new THREE.Vector3());
-                    model.position.sub(center);
-                    
-                    scene.add(model);
-                });
-            };
-            reader.readAsArrayBuffer(file);
-        });
+    hammer.on('pinchstart', (ev) => {
+      initialScaleDistance = ev.scale;
+    });
 
-        // Reset button handler
-        document.getElementById('reset-button').addEventListener('click', function() {
-            if (model) {
-                model.scale.copy(initialScale);
-                model.position.copy(initialPosition);
-                model.rotation.copy(initialRotation);
-            }
-        });
+    hammer.on('pinchmove', (ev) => {
+      // Scale model with pinch
+      const scaleChange = ev.scale - (initialScaleDistance || 1);
+      const factor = 1 + scaleChange * 0.5;
+      currentScale.x = currentScale.y = currentScale.z = Math.max(0.1, Math.min(5, factor));
+      updateModelTransform();
+    });
 
-        // Gesture controls
-        let touchStartX, touchStartY;
-        let modelStartRotation, modelStartScale, modelStartPosition;
+    hammer.on('pinchend', () => {
+      initialScaleDistance = null;
+    });
 
-        renderer.domElement.addEventListener('touchstart', function(event) {
-            touchStartX = event.touches[0].clientX;
-            touchStartY = event.touches[0].clientY;
+    hammer.on('swiperight', (ev) => {
+      // Rotate model with swipe
+      currentRotation.y += 15; // rotate 15 degrees per swipe right
+      updateModelTransform();
+    });
 
-            if (model) {
-                modelStartRotation = model.rotation.y;
-                modelStartScale = model.scale.x;
-                modelStartPosition = model.position.clone();
-            }
-        });
+    hammer.on('swipeleft', (ev) => {
+      currentRotation.y -= 15; // rotate 15 degrees per swipe left
+      updateModelTransform();
+    });
 
-        renderer.domElement.addEventListener('touchmove', function(event) {
-            if (!model) return;
+    // Reset button
+    resetBtn.addEventListener('click', () => {
+      currentPosition = {...originalTransform.position};
+      currentRotation = {...originalTransform.rotation};
+      currentScale = {...originalTransform.scale};
+      updateModelTransform();
+    });
 
-            const touchX = event.touches[0].clientX;
-            const touchY = event.touches[0].clientY;
-            const deltaX = touchX - touchStartX;
-            const deltaY = touchY - touchStartY;
-
-            // Rotation (single finger)
-            if (event.touches.length === 1) {
-                model.rotation.y = modelStartRotation + (deltaX * 0.01);
-            }
-            // Scale (pinch)
-            else if (event.touches.length === 2) {
-                const touch1 = event.touches[0];
-                const touch2 = event.touches[1];
-                const dist = Math.hypot(
-                    touch1.clientX - touch2.clientX,
-                    touch1.clientY - touch2.clientY
-                );
-                const scale = modelStartScale * (1 + (deltaY * 0.01));
-                model.scale.setScalar(Math.max(0.1, Math.min(3, scale)));
-            }
-        });
-
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
-
-            if (arToolkitSource.ready) {
-                arToolkitContext.update(arToolkitSource.domElement);
-            }
-
-            renderer.render(scene, camera);
-        }
-
-        // Start everything
-        init();
-        animate();
-    </script>
+    function updateModelTransform() {
+      model.setAttribute('position', `${currentPosition.x} ${currentPosition.y} ${currentPosition.z}`);
+      model.setAttribute('rotation', `${currentRotation.x} ${currentRotation.y} ${currentRotation.z}`);
+      model.setAttribute('scale', `${currentScale.x} ${currentScale.y} ${currentScale.z}`);
+    }
+  </script>
 </body>
 </html>
