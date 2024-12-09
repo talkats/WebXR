@@ -3,8 +3,8 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mobile AR Viewer</title>
-    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@1.3.0/dist/aframe-master.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/3.3.3/aframe/build/aframe-ar.js"></script>
     <style>
         .top-controls {
             position: fixed;
@@ -90,13 +90,23 @@
     </div>
 
     <a-scene 
-        embedded 
-        arjs="trackingMethod: best;"
-        renderer="logarithmicDepthBuffer: true;">
+        embedded
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; antialias: true; precision: mediump;"
+        arjs="sourceType: webcam; 
+              sourceWidth: 1280; 
+              sourceHeight: 960; 
+              displayWidth: 1280; 
+              displayHeight: 960; 
+              debugUIEnabled: false;
+              patternRatio: 0.75;
+              maxDetectionRate: 60;
+              detectionMode: mono_and_matrix;
+              matrixCodeType: 3x3;">
         <a-marker preset="hiro">
             <a-entity id="model-container" position="0 0 0" scale="0.5 0.5 0.5"></a-entity>
         </a-marker>
-        <a-entity camera></a-entity>
+        <a-entity camera look-controls="enabled: false"></a-entity>
     </a-scene>
 
     <script>
