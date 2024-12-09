@@ -13,10 +13,11 @@
             right: 0;
             padding: 20px;
             background: rgba(255, 255, 255, 0.9);
-            z-index: 1000;
+            z-index: 9999;  /* Increased z-index */
             display: flex;
             flex-direction: column;
             gap: 10px;
+            pointer-events: auto !important; /* Force pointer events */
         }
 
         .file-input-container {
@@ -45,10 +46,11 @@
             right: 0;
             padding: 20px;
             background: rgba(255, 255, 255, 0.9);
-            z-index: 1000;
+            z-index: 9999;  /* Increased z-index */
             display: flex;
             justify-content: center;
             gap: 15px;
+            pointer-events: auto !important; /* Force pointer events */
         }
 
         .control-button {
@@ -65,11 +67,18 @@
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            cursor: pointer;
+            pointer-events: auto !important; /* Force pointer events */
         }
 
         .control-button:active {
             background: #1976D2;
             transform: scale(0.95);
+        }
+
+        /* Force UI elements above AR scene */
+        .a-canvas {
+            z-index: 1 !important; /* Force canvas below UI */
         }
     </style>
 </head>
@@ -92,21 +101,18 @@
     <a-scene 
         embedded
         vr-mode-ui="enabled: false"
-        renderer="logarithmicDepthBuffer: true; antialias: true; precision: mediump;"
+        renderer="logarithmicDepthBuffer: true;"
         arjs="sourceType: webcam; 
-              sourceWidth: 1280; 
-              sourceHeight: 960; 
-              displayWidth: 1280; 
-              displayHeight: 960; 
               debugUIEnabled: false;
-              patternRatio: 0.75;
-              maxDetectionRate: 60;
-              detectionMode: mono_and_matrix;
-              matrixCodeType: 3x3;">
-        <a-marker preset="hiro">
+              sourceWidth: 1920;
+              sourceHeight: 1080;
+              displayWidth: 1920;
+              displayHeight: 1080;
+              facingMode: environment;">
+        <a-marker preset="hiro" smooth="true" smoothCount="5">
             <a-entity id="model-container" position="0 0 0" scale="0.5 0.5 0.5"></a-entity>
         </a-marker>
-        <a-entity camera look-controls="enabled: false"></a-entity>
+        <a-entity camera></a-entity>
     </a-scene>
 
     <script>
@@ -114,23 +120,25 @@
         let currentScale = 0.5;
         let currentRotation = 0;
 
-        // Prevent default touch behaviors
-        document.querySelectorAll('.control-button, #file-input').forEach(element => {
-            ['touchstart', 'touchend', 'click'].forEach(eventType => {
-                element.addEventListener(eventType, (e) => {
-                    e.stopPropagation();
-                });
-            });
-        });
-
-        // File input handling
-        document.getElementById('file-input').onchange = function(event) {
+        // Handle file input
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            event.stopPropagation();
             const file = event.target.files[0];
             if (file) {
                 const url = URL.createObjectURL(file);
                 modelContainer.setAttribute('gltf-model', url);
             }
-        };
+        });
+
+        // Make all controls clickable
+        document.querySelectorAll('.control-button, #file-input').forEach(element => {
+            ['touchstart', 'touchend', 'click'].forEach(eventType => {
+                element.addEventListener(eventType, (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                });
+            });
+        });
 
         // Scale controls
         function scaleUp() {
@@ -169,6 +177,13 @@
             updateScale();
             updateRotation();
         }
+
+        // Ensure controls stay visible
+        window.addEventListener('load', () => {
+            document.querySelectorAll('.top-controls, .bottom-controls').forEach(el => {
+                el.style.zIndex = '9999';
+            });
+        });
     </script>
 </body>
 </html>
