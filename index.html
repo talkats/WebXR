@@ -6,8 +6,8 @@
   <title>AR Viewer with Hiro Marker</title>
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <!-- AR.js -->
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar.js"></script>
+  <!-- AR.js with improved camera settings -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <!-- Hammer.js for gesture handling -->
   <script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
 
@@ -15,7 +15,6 @@
     body {
       margin: 0;
       font-family: sans-serif;
-      background: #f0f0f0;
       overflow: hidden;
     }
     #ui-container {
@@ -31,28 +30,31 @@
       display: block;
       margin-bottom: 10px;
     }
-    #model-container {
-      width: 100vw;
-      height: 100vh;
+    .arjs-loader {
+      height: 100%;
+      width: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      z-index: 9999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
-    /* Add zoom controls styling */
-    #zoom-controls {
-      position: absolute;
-      right: 10px;
-      bottom: 10px;
-      z-index: 999;
-      background: rgba(255,255,255,0.8);
-      padding: 10px;
-      border-radius: 4px;
-    }
-    .zoom-btn {
-      margin: 5px;
-      padding: 5px 15px;
-      cursor: pointer;
+    .arjs-loader div {
+      text-align: center;
+      font-size: 1.25em;
+      color: white;
     }
   </style>
 </head>
 <body>
+  <!-- Loading screen -->
+  <div class="arjs-loader">
+    <div>Loading, please wait...</div>
+  </div>
+
   <div id="ui-container">
     <label>
       Load GLB Model (max 70MB):
@@ -62,69 +64,65 @@
     <p>Use pinch to scale, swipe to rotate, and drag to move the model.</p>
   </div>
 
-  <!-- Add zoom controls -->
-  <div id="zoom-controls">
-    <button class="zoom-btn" id="zoomIn">+</button>
-    <button class="zoom-btn" id="zoomOut">-</button>
-  </div>
-
   <a-scene
     embedded
-    vr-mode-ui="enabled: false;"
-    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; cameraParametersUrl: https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/camera_para.dat;"
-    id="model-container"
-    renderer="antialias: true; alpha: true"
+    vr-mode-ui="enabled: false"
+    arjs='sourceType: webcam; 
+          sourceWidth:1280; 
+          sourceHeight:960; 
+          displayWidth: 1280; 
+          displayHeight: 960; 
+          debugUIEnabled: false; 
+          detectionMode: mono_and_matrix;
+          imageTargetSmoothingFactor: 0.8;'
+    renderer="antialias: true; logarithmicDepthBuffer: true; precision: high; alpha: true"
+    inspector="url: https://cdn.jsdelivr.net/gh/aframevr/aframe-inspector@master/dist/aframe-inspector.min.js"
   >
-    <!-- Marker -->
-    <a-marker type="hiro" id="hiroMarker" smooth="true" smoothCount="5">
+    <a-camera gps-camera rotation-reader>
+      <a-entity
+        cursor="fuse: false; rayOrigin: mouse;"
+        raycaster="far: ${customFields.libVersion}; interval: 1000; objects: .clickable">
+      </a-entity>
+    </a-camera>
+
+    <a-marker type="hiro"
+              smooth="true"
+              smoothCount="5"
+              smoothTolerance="0.01"
+              smoothThreshold="2"
+              raycaster="objects: .clickable"
+              emitevents="true"
+              cursor="fuse: false; rayOrigin: mouse;"
+              id="hiroMarker">
       <a-entity id="model"
-                rotation="0 0 0"
                 position="0 0 0"
-                scale="1 1 1"></a-entity>
+                rotation="0 0 0"
+                scale="0.5 0.5 0.5">
+      </a-entity>
     </a-marker>
-    <a-entity camera></a-entity>
   </a-scene>
 
   <script>
+    // Hide loader when scene is ready
+    document.querySelector('a-scene').addEventListener('loaded', function() {
+      document.querySelector('.arjs-loader').style.display = 'none';
+    });
+
     // Element references
     const fileInput = document.getElementById('fileInput');
     const model = document.getElementById('model');
     const resetBtn = document.getElementById('resetBtn');
-    const zoomIn = document.getElementById('zoomIn');
-    const zoomOut = document.getElementById('zoomOut');
 
     // Original transform values
     const originalTransform = {
       position: {x:0, y:0, z:0},
       rotation: {x:0, y:0, z:0},
-      scale: {x:0.5, y:0.5, z:0.5} // Reduced initial scale
+      scale: {x:0.5, y:0.5, z:0.5}
     };
 
     let currentScale = {...originalTransform.scale};
     let currentRotation = {...originalTransform.rotation};
     let currentPosition = {...originalTransform.position};
-
-    // Zoom controls
-    let zoomLevel = 1;
-    const zoomStep = 0.1;
-
-    zoomIn.addEventListener('click', () => {
-      zoomLevel += zoomStep;
-      updateZoom();
-    });
-
-    zoomOut.addEventListener('click', () => {
-      zoomLevel = Math.max(0.1, zoomLevel - zoomStep);
-      updateZoom();
-    });
-
-    function updateZoom() {
-      const scene = document.querySelector('a-scene');
-      if (scene.camera) {
-        scene.camera.zoom = zoomLevel;
-        scene.camera.updateProjectionMatrix();
-      }
-    }
 
     // Load model after file selection
     fileInput.addEventListener('change', function(event) {
@@ -138,8 +136,6 @@
 
       const blobURL = URL.createObjectURL(file);
       model.setAttribute('gltf-model', blobURL);
-      
-      // Reset transform when loading new model
       resetTransform();
     });
 
@@ -161,8 +157,8 @@
     hammer.on('panmove', (ev) => {
       if (!lastPanPosition) lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
 
-      currentPosition.x += (ev.deltaX - lastPanPosition.x) * 0.0005; // Reduced sensitivity
-      currentPosition.y += (-(ev.deltaY - lastPanPosition.y)) * 0.0005; // Reduced sensitivity
+      currentPosition.x += (ev.deltaX - lastPanPosition.x) * 0.0005;
+      currentPosition.y += (-(ev.deltaY - lastPanPosition.y)) * 0.0005;
       lastPanPosition = {x: ev.deltaX, y: ev.deltaY};
 
       updateModelTransform();
@@ -178,7 +174,7 @@
 
     hammer.on('pinchmove', (ev) => {
       const scaleChange = ev.scale - (initialScaleDistance || 1);
-      const factor = 1 + scaleChange * 0.25; // Reduced scaling sensitivity
+      const factor = 1 + scaleChange * 0.25;
       const newScale = originalTransform.scale.x * factor;
       currentScale.x = currentScale.y = currentScale.z = Math.max(0.1, Math.min(2, newScale));
       updateModelTransform();
@@ -198,15 +194,12 @@
       updateModelTransform();
     });
 
-    // Reset functionality
     resetBtn.addEventListener('click', resetTransform);
 
     function resetTransform() {
       currentPosition = {...originalTransform.position};
       currentRotation = {...originalTransform.rotation};
       currentScale = {...originalTransform.scale};
-      zoomLevel = 1;
-      updateZoom();
       updateModelTransform();
     }
 
